@@ -1,3 +1,4 @@
+export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { stripe, getPriceId } from "@/lib/stripe";
 import { createServerSupabaseClient } from "@/lib/supabase";

@@ -1,9 +1,27 @@
 "use client";
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Area, AreaChart, CartesianGrid, BarChart, Bar } from "recharts";
+import { useAuth } from "@/components/AuthProvider";
+import AuthModal from "@/components/AuthModal";
 
-/* ═══════════ SUBSCRIPTION PLANS ═══════════ */
-const PLANS = {
+/* ═══════════ SUBSCRIPTION PLANS (defaults) ═══════════ */
+const ALL_FEATURES = [
+  { key: "wishlistMax", label: "Wishlist tracking limit", type: "number", freeDefault: 5, proDefault: 50, ultDefault: 999 },
+  { key: "regionsMax", label: "Region comparison", type: "number", freeDefault: 1, proDefault: 3, ultDefault: 7 },
+  { key: "priceHistoryMonths", label: "Price history (months)", type: "number", freeDefault: 3, proDefault: 12, ultDefault: 36 },
+  { key: "perGameAlerts", label: "Per-game custom alerts", type: "bool" },
+  { key: "emailNotifs", label: "Email notifications", type: "bool" },
+  { key: "telegramNotifs", label: "Telegram notifications", type: "bool" },
+  { key: "noAds", label: "Ad-free experience", type: "bool" },
+  { key: "priceStats", label: "Price stats & analysis", type: "bool" },
+  { key: "desiredPrice", label: "Desired price targets", type: "bool" },
+  { key: "multiRegionNotifs", label: "Multi-region notifications", type: "bool" },
+  { key: "priorityAlerts", label: "Priority deal alerts", type: "bool" },
+  { key: "dlcTracking", label: "DLC & add-on tracking", type: "bool" },
+  { key: "exportData", label: "Data export (CSV/JSON)", type: "bool" },
+];
+
+const DEFAULT_PLANS = {
   free: {
     id: "free", name: "Free", price: 0, period: "",
     color: "#8892a4", icon: "🎮",
@@ -59,24 +77,24 @@ const genRegionPrices = (baseUSD) => REGIONS.map(r => {
 });
 
 const GAMES = [
-  { id: 1, title: "God of War Ragnarök", originalPrice: 69.99, salePrice: 29.99, discount: 57, image: "🪓", platform: ["PS5", "PS4"], rating: 4.9, metacritic: 94, endDate: "2026-04-05", genre: "Action RPG", developer: "Santa Monica Studio", releaseDate: "2022-11-09", psPlusTier: null, size: "118 GB", players: "1", onlinePlay: false },
-  { id: 2, title: "Spider-Man 2", originalPrice: 69.99, salePrice: 34.99, discount: 50, image: "🕷️", platform: ["PS5"], rating: 4.8, metacritic: 90, endDate: "2026-04-02", genre: "Action", developer: "Insomniac Games", releaseDate: "2023-10-20", psPlusTier: "Extra", size: "98 GB", players: "1", onlinePlay: false },
-  { id: 3, title: "Horizon Forbidden West", originalPrice: 59.99, salePrice: 19.99, discount: 67, image: "🏹", platform: ["PS5", "PS4"], rating: 4.7, metacritic: 88, endDate: "2026-04-10", genre: "Open World", developer: "Guerrilla Games", releaseDate: "2022-02-18", psPlusTier: "Extra", size: "96 GB", players: "1", onlinePlay: false },
-  { id: 4, title: "The Last of Us Part I", originalPrice: 69.99, salePrice: 27.99, discount: 60, image: "🍄", platform: ["PS5"], rating: 4.9, metacritic: 88, endDate: "2026-03-30", genre: "Action Adventure", developer: "Naughty Dog", releaseDate: "2022-09-02", psPlusTier: "Premium", size: "79 GB", players: "1", onlinePlay: false },
-  { id: 5, title: "Returnal", originalPrice: 69.99, salePrice: 24.99, discount: 64, image: "🔫", platform: ["PS5"], rating: 4.5, metacritic: 86, endDate: "2026-04-08", genre: "Roguelike", developer: "Housemarque", releaseDate: "2021-04-30", psPlusTier: "Extra", size: "56 GB", players: "1-2", onlinePlay: true },
-  { id: 6, title: "Gran Turismo 7", originalPrice: 69.99, salePrice: 29.99, discount: 57, image: "🏎️", platform: ["PS5", "PS4"], rating: 4.6, metacritic: 87, endDate: "2026-04-12", genre: "Racing", developer: "Polyphony Digital", releaseDate: "2022-03-04", psPlusTier: "Extra", size: "110 GB", players: "1-20", onlinePlay: true },
-  { id: 7, title: "Ratchet & Clank: Rift Apart", originalPrice: 69.99, salePrice: 19.99, discount: 71, image: "🔧", platform: ["PS5"], rating: 4.8, metacritic: 88, endDate: "2026-04-01", genre: "Platformer", developer: "Insomniac Games", releaseDate: "2021-06-11", psPlusTier: "Extra", size: "33 GB", players: "1", onlinePlay: false },
-  { id: 8, title: "Demon's Souls", originalPrice: 69.99, salePrice: 29.99, discount: 57, image: "⚔️", platform: ["PS5"], rating: 4.7, metacritic: 92, endDate: "2026-04-15", genre: "Souls-like", developer: "Bluepoint Games", releaseDate: "2020-11-12", psPlusTier: "Premium", size: "66 GB", players: "1-6", onlinePlay: true },
-  { id: 9, title: "Ghostwire: Tokyo", originalPrice: 59.99, salePrice: 14.99, discount: 75, image: "👻", platform: ["PS5"], rating: 4.2, metacritic: 73, endDate: "2026-04-03", genre: "Action", developer: "Tango Gameworks", releaseDate: "2022-03-25", psPlusTier: "Extra", size: "20 GB", players: "1", onlinePlay: false },
-  { id: 10, title: "Stray", originalPrice: 29.99, salePrice: 9.99, discount: 67, image: "🐱", platform: ["PS5", "PS4"], rating: 4.6, metacritic: 83, endDate: "2026-04-06", genre: "Adventure", developer: "BlueTwelve Studio", releaseDate: "2022-07-19", psPlusTier: "Extra", size: "7.5 GB", players: "1", onlinePlay: false },
-  { id: 11, title: "Final Fantasy XVI", originalPrice: 69.99, salePrice: 34.99, discount: 50, image: "⚡", platform: ["PS5"], rating: 4.5, metacritic: 87, endDate: "2026-04-09", genre: "Action RPG", developer: "Square Enix", releaseDate: "2023-06-22", psPlusTier: null, size: "91 GB", players: "1", onlinePlay: false },
-  { id: 12, title: "Stellar Blade", originalPrice: 69.99, salePrice: 44.99, discount: 36, image: "🗡️", platform: ["PS5"], rating: 4.4, metacritic: 80, endDate: "2026-04-11", genre: "Action", developer: "Shift Up", releaseDate: "2024-04-26", psPlusTier: null, size: "45 GB", players: "1", onlinePlay: false },
-  { id: 13, title: "Astro Bot", originalPrice: 59.99, salePrice: 39.99, discount: 33, image: "🤖", platform: ["PS5"], rating: 4.9, metacritic: 94, endDate: "2026-04-14", genre: "Platformer", developer: "Team Asobi", releaseDate: "2024-09-06", psPlusTier: null, size: "22 GB", players: "1", onlinePlay: false },
-  { id: 14, title: "Sackboy: A Big Adventure", originalPrice: 59.99, salePrice: 14.99, discount: 75, image: "🧶", platform: ["PS5", "PS4"], rating: 4.5, metacritic: 79, endDate: "2026-04-07", genre: "Platformer", developer: "Sumo Digital", releaseDate: "2020-11-12", psPlusTier: "Extra", size: "52 GB", players: "1-4", onlinePlay: true },
-  { id: 15, title: "Death Stranding DC", originalPrice: 49.99, salePrice: 19.99, discount: 60, image: "📦", platform: ["PS5"], rating: 4.3, metacritic: 85, endDate: "2026-04-04", genre: "Action", developer: "Kojima Productions", releaseDate: "2021-09-24", psPlusTier: "Extra", size: "75 GB", players: "1", onlinePlay: false },
-  { id: 16, title: "Uncharted: Legacy of Thieves", originalPrice: 49.99, salePrice: 24.99, discount: 50, image: "🗺️", platform: ["PS5"], rating: 4.7, metacritic: 87, endDate: "2026-04-13", genre: "Action Adventure", developer: "Naughty Dog", releaseDate: "2022-01-28", psPlusTier: "Extra", size: "126 GB", players: "1", onlinePlay: false },
-  { id: 17, title: "MLB The Show 25", originalPrice: 69.99, salePrice: 49.99, discount: 29, image: "⚾", platform: ["PS5"], rating: 4.1, metacritic: 78, endDate: "2026-04-16", genre: "Sports", developer: "San Diego Studio", releaseDate: "2025-03-18", psPlusTier: null, size: "68 GB", players: "1-8", onlinePlay: true },
-  { id: 18, title: "It Takes Two", originalPrice: 39.99, salePrice: 9.99, discount: 75, image: "💑", platform: ["PS5", "PS4"], rating: 4.8, metacritic: 88, endDate: "2026-04-02", genre: "Co-op", developer: "Hazelight Studios", releaseDate: "2021-03-26", psPlusTier: "Extra", size: "35 GB", players: "2", onlinePlay: true },
+  { id: 1, title: "God of War Ragnarök", originalPrice: 69.99, salePrice: 29.99, discount: 57, image: "https://image.api.playstation.com/vulcan/ap/rnd/202207/1210/4xJ8XB3bi888QTLZYdl7Oi0s.png", platform: ["PS5", "PS4"], rating: 4.9, metacritic: 94, endDate: "2026-04-05", genre: "Action RPG", developer: "Santa Monica Studio", releaseDate: "2022-11-09", psPlusTier: null, size: "118 GB", players: "1", onlinePlay: false },
+  { id: 2, title: "Spider-Man 2", originalPrice: 69.99, salePrice: 34.99, discount: 50, image: "https://image.api.playstation.com/vulcan/ap/rnd/202306/1301/9395013eab08120240ad3e5cbc44bd5f1eb151018baea084.png", platform: ["PS5"], rating: 4.8, metacritic: 90, endDate: "2026-04-02", genre: "Action", developer: "Insomniac Games", releaseDate: "2023-10-20", psPlusTier: "Extra", size: "98 GB", players: "1", onlinePlay: false },
+  { id: 3, title: "Horizon Forbidden West", originalPrice: 59.99, salePrice: 19.99, discount: 67, image: "https://image.api.playstation.com/vulcan/ap/rnd/202107/3100/HO8vkO9pfXhwbHi5WHECQJdN.png", platform: ["PS5", "PS4"], rating: 4.7, metacritic: 88, endDate: "2026-04-10", genre: "Open World", developer: "Guerrilla Games", releaseDate: "2022-02-18", psPlusTier: "Extra", size: "96 GB", players: "1", onlinePlay: false },
+  { id: 4, title: "The Last of Us Part I", originalPrice: 69.99, salePrice: 27.99, discount: 60, image: "https://image.api.playstation.com/vulcan/ap/rnd/202206/0720/eEczyEMDd2BLa3dtkGJVE9Id.png", platform: ["PS5"], rating: 4.9, metacritic: 88, endDate: "2026-03-30", genre: "Action Adventure", developer: "Naughty Dog", releaseDate: "2022-09-02", psPlusTier: "Premium", size: "79 GB", players: "1", onlinePlay: false },
+  { id: 5, title: "Returnal", originalPrice: 69.99, salePrice: 24.99, discount: 64, image: "https://image.api.playstation.com/vulcan/ap/rnd/202101/0503/sJnhPJpXHCEyFBZTnDPFe5LO.png", platform: ["PS5"], rating: 4.5, metacritic: 86, endDate: "2026-04-08", genre: "Roguelike", developer: "Housemarque", releaseDate: "2021-04-30", psPlusTier: "Extra", size: "56 GB", players: "1-2", onlinePlay: true },
+  { id: 6, title: "Gran Turismo 7", originalPrice: 69.99, salePrice: 29.99, discount: 57, image: "https://image.api.playstation.com/vulcan/ap/rnd/202109/1321/yZ7dpmjtmkMM5bkYOLHRVjCI.png", platform: ["PS5", "PS4"], rating: 4.6, metacritic: 87, endDate: "2026-04-12", genre: "Racing", developer: "Polyphony Digital", releaseDate: "2022-03-04", psPlusTier: "Extra", size: "110 GB", players: "1-20", onlinePlay: true },
+  { id: 7, title: "Ratchet & Clank: Rift Apart", originalPrice: 69.99, salePrice: 19.99, discount: 71, image: "https://image.api.playstation.com/vulcan/ap/rnd/202101/2921/CnYdTpGaLMBVcsM88yJi1MrB.png", platform: ["PS5"], rating: 4.8, metacritic: 88, endDate: "2026-04-01", genre: "Platformer", developer: "Insomniac Games", releaseDate: "2021-06-11", psPlusTier: "Extra", size: "33 GB", players: "1", onlinePlay: false },
+  { id: 8, title: "Demon's Souls", originalPrice: 69.99, salePrice: 29.99, discount: 57, image: "https://image.api.playstation.com/vulcan/ap/rnd/202011/1217/F01mhCMEbcOuJl8GcMBQi74E.png", platform: ["PS5"], rating: 4.7, metacritic: 92, endDate: "2026-04-15", genre: "Souls-like", developer: "Bluepoint Games", releaseDate: "2020-11-12", psPlusTier: "Premium", size: "66 GB", players: "1-6", onlinePlay: true },
+  { id: 9, title: "Ghostwire: Tokyo", originalPrice: 59.99, salePrice: 14.99, discount: 75, image: "https://image.api.playstation.com/vulcan/ap/rnd/202203/1205/YDbhbVCOh6pnadSMQBEjCExG.png", platform: ["PS5"], rating: 4.2, metacritic: 73, endDate: "2026-04-03", genre: "Action", developer: "Tango Gameworks", releaseDate: "2022-03-25", psPlusTier: "Extra", size: "20 GB", players: "1", onlinePlay: false },
+  { id: 10, title: "Stray", originalPrice: 29.99, salePrice: 9.99, discount: 67, image: "https://image.api.playstation.com/vulcan/ap/rnd/202206/0300/WNGDmyhPRgVoVGIEwEeDIFE0.png", platform: ["PS5", "PS4"], rating: 4.6, metacritic: 83, endDate: "2026-04-06", genre: "Adventure", developer: "BlueTwelve Studio", releaseDate: "2022-07-19", psPlusTier: "Extra", size: "7.5 GB", players: "1", onlinePlay: false },
+  { id: 11, title: "Final Fantasy XVI", originalPrice: 69.99, salePrice: 34.99, discount: 50, image: "https://image.api.playstation.com/vulcan/ap/rnd/202211/2222/l05YBHK8ijwGKECPjRFHv4ls.png", platform: ["PS5"], rating: 4.5, metacritic: 87, endDate: "2026-04-09", genre: "Action RPG", developer: "Square Enix", releaseDate: "2023-06-22", psPlusTier: null, size: "91 GB", players: "1", onlinePlay: false },
+  { id: 12, title: "Stellar Blade", originalPrice: 69.99, salePrice: 44.99, discount: 36, image: "https://image.api.playstation.com/vulcan/ap/rnd/202311/2711/59217789ccaea8e498cbcaecf11eeb6d6957b498faaeec60.png", platform: ["PS5"], rating: 4.4, metacritic: 80, endDate: "2026-04-11", genre: "Action", developer: "Shift Up", releaseDate: "2024-04-26", psPlusTier: null, size: "45 GB", players: "1", onlinePlay: false },
+  { id: 13, title: "Astro Bot", originalPrice: 59.99, salePrice: 39.99, discount: 33, image: "https://image.api.playstation.com/vulcan/ap/rnd/202406/0501/70506b79ad6c3b8e5dc1b847a4b96c0c2acaa1c5e3f7e9e3.png", platform: ["PS5"], rating: 4.9, metacritic: 94, endDate: "2026-04-14", genre: "Platformer", developer: "Team Asobi", releaseDate: "2024-09-06", psPlusTier: null, size: "22 GB", players: "1", onlinePlay: false },
+  { id: 14, title: "Sackboy: A Big Adventure", originalPrice: 59.99, salePrice: 14.99, discount: 75, image: "https://image.api.playstation.com/vulcan/ap/rnd/202008/1318/Pp4FPTxbAuWqpmTjGCPmobIR.png", platform: ["PS5", "PS4"], rating: 4.5, metacritic: 79, endDate: "2026-04-07", genre: "Platformer", developer: "Sumo Digital", releaseDate: "2020-11-12", psPlusTier: "Extra", size: "52 GB", players: "1-4", onlinePlay: true },
+  { id: 15, title: "Death Stranding DC", originalPrice: 49.99, salePrice: 19.99, discount: 60, image: "https://image.api.playstation.com/vulcan/ap/rnd/202106/2520/m7mhEVk1pYOeMPmMDQveCPa5.png", platform: ["PS5"], rating: 4.3, metacritic: 85, endDate: "2026-04-04", genre: "Action", developer: "Kojima Productions", releaseDate: "2021-09-24", psPlusTier: "Extra", size: "75 GB", players: "1", onlinePlay: false },
+  { id: 16, title: "Uncharted: Legacy of Thieves", originalPrice: 49.99, salePrice: 24.99, discount: 50, image: "https://image.api.playstation.com/vulcan/ap/rnd/202110/2019/CBMnpwWFz7OTAOT4DVkpK3lR.png", platform: ["PS5"], rating: 4.7, metacritic: 87, endDate: "2026-04-13", genre: "Action Adventure", developer: "Naughty Dog", releaseDate: "2022-01-28", psPlusTier: "Extra", size: "126 GB", players: "1", onlinePlay: false },
+  { id: 17, title: "MLB The Show 25", originalPrice: 69.99, salePrice: 49.99, discount: 29, image: "https://image.api.playstation.com/vulcan/ap/rnd/202502/1023/46ef0cfb5e2b5287f989acf20df7ee6b0c98ac88d2b63c5a.png", platform: ["PS5"], rating: 4.1, metacritic: 78, endDate: "2026-04-16", genre: "Sports", developer: "San Diego Studio", releaseDate: "2025-03-18", psPlusTier: null, size: "68 GB", players: "1-8", onlinePlay: true },
+  { id: 18, title: "It Takes Two", originalPrice: 39.99, salePrice: 9.99, discount: 75, image: "https://image.api.playstation.com/vulcan/ap/rnd/202012/0815/rmjVhJYKfPOVyghZprJXFaNa.png", platform: ["PS5", "PS4"], rating: 4.8, metacritic: 88, endDate: "2026-04-02", genre: "Co-op", developer: "Hazelight Studios", releaseDate: "2021-03-26", psPlusTier: "Extra", size: "35 GB", players: "2", onlinePlay: true },
 ].map(g => ({ ...g, priceHistory: genHistory(g.originalPrice), regionPrices: genRegionPrices(g.originalPrice), lowestEver: +(g.originalPrice * 0.2).toFixed(2), avgPrice: +(g.originalPrice * 0.65).toFixed(2), saleCount: Math.floor(Math.random() * 12) + 3 }));
 
 const GENRES = [...new Set(GAMES.map(g => g.genre))];
@@ -201,7 +219,10 @@ const AdBanner = ({ onUpgrade }) => (
 
 /* ═══════════ MAIN APP ═══════════ */
 export default function App() {
+  const { user, profile, loading: authLoading, signOut, refreshProfile } = useAuth();
+  const [showAuthModal, setShowAuthModal] = useState(false);
   const [page, setPage] = useState("dashboard");
+  const [plans, setPlans] = useState(DEFAULT_PLANS);
   const [subscription, setSubscription] = useState({ plan: "free", billing: "monthly", startDate: null, paymentMethod: null });
   const [showPayment, setShowPayment] = useState(null);
   const [paymentStep, setPaymentStep] = useState("select");
@@ -223,19 +244,65 @@ export default function App() {
   const [gameAlerts, setGameAlerts] = useState({});
   const [notifPrefs, setNotifPrefs] = useState({ email: false, push: true, telegram: false, telegramId: "", emailAddr: "" });
 
-  const plan = PLANS[subscription.plan] || PLANS.free;
-  const limits = plan.limits || PLANS.free.limits;
+  const plan = plans[subscription.plan] || plans.free;
+  const limits = plan.limits || plans.free.limits;
   const isPro = subscription.plan === "pro" || subscription.plan === "ultimate";
 
   const showToast = (msg) => { setNotifToast(msg); setTimeout(() => setNotifToast(null), 3500); };
 
+  // Sync subscription from Supabase profile
+  useEffect(() => {
+    if (profile) {
+      setSubscription(s => ({
+        ...s,
+        plan: profile.plan || "free",
+        billing: profile.billing_cycle || "monthly",
+        startDate: profile.subscription_start,
+        paymentMethod: profile.stripe_subscription_id ? "Active" : null,
+      }));
+      if (profile.psn_username) { setPsnLinked(true); setPsnUsername(profile.psn_username); }
+      if (profile.default_region) setSelectedRegion(profile.default_region);
+      if (profile.notification_push !== undefined) setNotifPrefs(p => ({ ...p, push: profile.notification_push, email: profile.notification_email, telegram: profile.notification_telegram, telegramId: profile.telegram_chat_id || "", emailAddr: profile.email || "" }));
+    }
+  }, [profile]);
+
+  // Helper: require login before action
+  const requireAuth = (action) => {
+    if (!user) { setShowAuthModal(true); return false; }
+    return true;
+  };
+
   const canAddWishlist = wishlist.size < limits.wishlistMax;
-  const toggleWishlist = (id) => {
+  const toggleWishlist = async (id) => {
+    if (!requireAuth()) return;
     if (!wishlist.has(id) && !canAddWishlist) { showToast("Wishlist limit reached! Upgrade for more."); return; }
+    // Update locally immediately
     setWishlist(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
     showToast(wishlist.has(id) ? "Removed from wishlist" : "Added to wishlist ❤️");
+    // Save to database
+    if (user) {
+      try {
+        await fetch("/api/wishlist", {
+          method: wishlist.has(id) ? "DELETE" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userId: user.id, gameId: id }),
+        });
+      } catch {}
+    }
   };
-  const toggleOwned = (id) => setOwned(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const toggleOwned = async (id) => {
+    if (!requireAuth()) return;
+    setOwned(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+    if (user) {
+      try {
+        await fetch("/api/owned", {
+          method: owned.has(id) ? "DELETE" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userId: user.id, gameId: id }),
+        });
+      } catch {}
+    }
+  };
 
   const isAlerted = (game) => {
     const ga = gameAlerts[game.id];
@@ -265,24 +332,60 @@ export default function App() {
     return list;
   }, [searchTerm, filters]);
 
-  const linkPSN = () => { if (psnInput.trim()) { setPsnUsername(psnInput.trim()); setPsnLinked(true); showToast('PSN "' + psnInput.trim() + '" linked!'); setPsnInput(""); } };
+  const linkPSN = async () => {
+    if (!requireAuth()) return;
+    if (!psnInput.trim()) return;
+    try {
+      await fetch("/api/psn/link", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: user.id, psnUsername: psnInput.trim() }),
+      });
+      setPsnUsername(psnInput.trim()); setPsnLinked(true);
+      showToast('PSN "' + psnInput.trim() + '" linked!');
+      setPsnInput("");
+      refreshProfile();
+    } catch { showToast("Failed to link PSN account"); }
+  };
   const setGameAlert = (id, alert) => setGameAlerts(prev => ({ ...prev, [id]: alert }));
   const openUpgrade = (planId) => { setShowPayment(planId || "pro"); setPaymentStep("select"); setPaymentForm({ cardNumber: "", expiry: "", cvc: "", name: "", billingCycle: "monthly" }); };
-  const processPayment = () => {
+  const processPayment = async () => {
+    if (!user) { setShowAuthModal(true); return; }
     setPaymentProcessing(true);
-    setTimeout(() => {
-      setSubscription({ plan: showPayment, billing: paymentForm.billingCycle, startDate: new Date().toISOString(), paymentMethod: "••••" + paymentForm.cardNumber.replace(/\s/g,"").slice(-4) });
-      setPaymentProcessing(false); setShowPayment(null);
-      showToast("🎉 Welcome to " + PLANS[showPayment].name + "! All features unlocked.");
-    }, 2500);
+    try {
+      const res = await fetch("/api/stripe/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ plan: showPayment, cycle: paymentForm.billingCycle, userId: user.id }),
+      });
+      const data = await res.json();
+      if (data.url) { window.location.href = data.url; }
+      else { showToast(data.error || "Checkout failed"); setPaymentProcessing(false); }
+    } catch (err) {
+      showToast("Payment error. Please try again.");
+      setPaymentProcessing(false);
+    }
   };
-  const cancelSubscription = () => { setSubscription({ plan: "free", billing: "", startDate: null, paymentMethod: null }); showToast("Subscription cancelled."); };
+
+  const cancelSubscription = async () => {
+    if (!user) return;
+    try {
+      const res = await fetch("/api/stripe/portal", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: user.id }),
+      });
+      const data = await res.json();
+      if (data.url) window.location.href = data.url;
+      else { setSubscription({ plan: "free", billing: "", startDate: null, paymentMethod: null }); showToast("Subscription cancelled."); }
+    } catch { showToast("Error opening billing portal."); }
+  };
   const visibleHistory = (hist) => hist.filter(h => h.month <= limits.priceHistoryMonths);
 
   /* ═══════════ PAYMENT MODAL ═══════════ */
   const PaymentModal = () => {
     if (!showPayment) return null;
-    const tp = PLANS[showPayment]; if (!tp) return null;
+    const tp = plans[showPayment]; if (!tp) return null;
     const price = paymentForm.billingCycle === "yearly" ? tp.yearlyPrice : paymentForm.billingCycle === "lifetime" ? tp.lifetimePrice : tp.monthlyPrice;
     return (
       <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", zIndex: 2000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20, backdropFilter: "blur(10px)" }} onClick={() => !paymentProcessing && setShowPayment(null)}>
@@ -299,7 +402,7 @@ export default function App() {
                 <div><h2 style={{ fontFamily: "'Rajdhani'", fontWeight: 700, fontSize: 22 }}>Choose Your Plan</h2><p style={{ fontSize: 12, color: "var(--text3)" }}>Unlock premium features</p></div>
                 <button onClick={() => setShowPayment(null)} style={{ background: "rgba(255,255,255,0.06)", border: "none", borderRadius: 10, width: 36, height: 36, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text2)" }}><Icon name="x" size={16} /></button>
               </div>
-              {["pro", "ultimate"].map(pid => { const pl = PLANS[pid]; const sel = showPayment === pid; return (
+              {["pro", "ultimate"].map(pid => { const pl = plans[pid]; const sel = showPayment === pid; return (
                 <div key={pid} onClick={() => setShowPayment(pid)} style={{ padding: 20, borderRadius: 18, marginBottom: 12, cursor: "pointer", transition: "0.3s", border: sel ? "2px solid " + pl.color : "2px solid var(--border)", background: sel ? (pid === "ultimate" ? "rgba(255,214,0,0.06)" : "rgba(0,212,255,0.06)") : "var(--surface2)" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 10 }}><span style={{ fontSize: 24 }}>{pl.icon}</span><div><div style={{ fontFamily: "'Rajdhani'", fontWeight: 700, fontSize: 18, color: pl.color }}>{pl.name}</div><div style={{ fontSize: 11, color: "var(--text3)" }}>From ${pl.monthlyPrice}/mo</div></div></div>
@@ -308,7 +411,7 @@ export default function App() {
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>{pl.features.slice(0, 4).map((f, i) => <span key={i} style={{ fontSize: 10, padding: "2px 8px", borderRadius: 5, background: "rgba(255,255,255,0.04)", color: "var(--text2)" }}>✓ {f}</span>)}{pl.features.length > 4 && <span style={{ fontSize: 10, color: "var(--text3)" }}>+{pl.features.length - 4} more</span>}</div>
                 </div>
               ); })}
-              <button onClick={() => setPaymentStep("billing")} style={{ width: "100%", padding: 14, borderRadius: 14, border: "none", cursor: "pointer", fontWeight: 700, fontSize: 15, background: showPayment === "ultimate" ? "var(--grad-ult)" : "var(--grad-pro)", color: showPayment === "ultimate" ? "#000" : "#fff", marginTop: 8 }}>Continue with {PLANS[showPayment]?.name} →</button>
+              <button onClick={() => setPaymentStep("billing")} style={{ width: "100%", padding: 14, borderRadius: 14, border: "none", cursor: "pointer", fontWeight: 700, fontSize: 15, background: showPayment === "ultimate" ? "var(--grad-ult)" : "var(--grad-pro)", color: showPayment === "ultimate" ? "#000" : "#fff", marginTop: 8 }}>Continue with {plans[showPayment]?.name} →</button>
               <p style={{ textAlign: "center", fontSize: 11, color: "var(--text3)", marginTop: 12 }}>Cancel anytime · 7-day money-back guarantee</p>
             </div>
           ) : paymentStep === "billing" ? (
@@ -365,7 +468,7 @@ export default function App() {
       <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.8)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20, backdropFilter: "blur(8px)" }} onClick={onClose}>
         <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 24, width: "100%", maxWidth: 780, maxHeight: "90vh", overflow: "auto", animation: "fadeIn 0.3s both" }} onClick={e => e.stopPropagation()}>
           <div style={{ padding: "22px 22px 14px", borderBottom: "1px solid var(--border)", display: "flex", gap: 14, alignItems: "flex-start" }}>
-            <div style={{ width: 64, height: 64, borderRadius: 14, background: "var(--surface2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 32, flexShrink: 0 }}>{game.image}</div>
+            <div style={{ width: 64, height: 64, borderRadius: 14, background: "var(--surface2)", overflow: "hidden", flexShrink: 0 }}><img src={game.image} alt={game.title} style={{ width: "100%", height: "100%", objectFit: "cover" }} /></div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <h2 style={{ fontFamily: "'Rajdhani'", fontWeight: 700, fontSize: 20, margin: "0 0 4px" }}>{game.title}</h2>
               <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 4 }}>{game.platform.map(pp => <span key={pp} className="badge" style={{ background: "rgba(0,111,255,0.15)", color: "var(--blue)" }}>{pp}</span>)}<span className="badge" style={{ background: "rgba(255,255,255,0.06)", color: "var(--text2)" }}>{game.genre}</span>{game.psPlusTier && <span className="badge" style={{ background: "rgba(255,214,0,0.15)", color: "var(--yellow)" }}>PS+ {game.psPlusTier}</span>}</div>
@@ -405,7 +508,7 @@ export default function App() {
   const GameCard = ({ game, idx }) => { const al = isAlerted(game), days = Math.ceil((new Date(game.endDate) - new Date()) / 86400000); return (
     <div onClick={() => setSelectedGame(game)} style={{ background: al ? "linear-gradient(160deg, rgba(0,111,255,0.06), rgba(0,212,255,0.03))" : "var(--surface)", border: al ? "1px solid rgba(0,212,255,0.2)" : "1px solid var(--border)", borderRadius: 16, overflow: "hidden", cursor: "pointer", transition: "all 0.35s cubic-bezier(0.16,1,0.3,1)", animation: "fadeIn 0.4s " + (idx * 0.03) + "s both", position: "relative" }} onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-4px)"; e.currentTarget.style.boxShadow = "0 16px 48px rgba(0,0,0,0.3)"; }} onMouseLeave={e => { e.currentTarget.style.transform = ""; e.currentTarget.style.boxShadow = ""; }}>
       {al && <div style={{ position: "absolute", zIndex: 2, top: 8, left: 8, background: "var(--grad1)", color: "#fff", padding: "2px 7px", borderRadius: 5, fontSize: 8, fontWeight: 700, fontFamily: "'Rajdhani'", letterSpacing: 1.5 }}>🔔 ALERT</div>}
-      <div style={{ height: 100, display: "flex", alignItems: "center", justifyContent: "center", background: "linear-gradient(160deg, " + (al ? "rgba(0,60,140,0.3)" : "rgba(20,20,40,0.5)") + ", rgba(0,0,0,0.1))", fontSize: 40, position: "relative" }}>{game.image}<div style={{ position: "absolute", top: 7, right: 7, background: game.discount >= 60 ? "var(--red)" : game.discount >= 50 ? "var(--orange)" : "rgba(255,255,255,0.12)", color: "#fff", padding: "3px 6px", borderRadius: 6, fontFamily: "'Rajdhani'", fontWeight: 700, fontSize: 11 }}>-{game.discount}%</div></div>
+      <div style={{ height: 100, display: "flex", alignItems: "center", justifyContent: "center", background: "linear-gradient(160deg, " + (al ? "rgba(0,60,140,0.3)" : "rgba(20,20,40,0.5)") + ", rgba(0,0,0,0.1))", position: "relative", overflow: "hidden" }}><img src={game.image} alt={game.title} style={{ width: "100%", height: "100%", objectFit: "cover" }} /><div style={{ position: "absolute", top: 7, right: 7, background: game.discount >= 60 ? "var(--red)" : game.discount >= 50 ? "var(--orange)" : "rgba(255,255,255,0.12)", color: "#fff", padding: "3px 6px", borderRadius: 6, fontFamily: "'Rajdhani'", fontWeight: 700, fontSize: 11 }}>-{game.discount}%</div></div>
       <div style={{ padding: "10px 12px 12px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 4 }}><h3 style={{ fontWeight: 700, fontSize: 12, margin: 0, lineHeight: 1.3, flex: 1, marginRight: 4 }}>{game.title}</h3><button onClick={e => { e.stopPropagation(); toggleWishlist(game.id); }} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 13, padding: 0 }}>{wishlist.has(game.id) ? "❤️" : "🤍"}</button></div>
         <div style={{ display: "flex", gap: 3, marginBottom: 6, flexWrap: "wrap" }}>{game.platform.map(pp => <span key={pp} className="badge" style={{ background: "rgba(255,255,255,0.05)", color: "var(--text3)", fontSize: 8 }}>{pp}</span>)}<span className="badge" style={{ background: "rgba(255,255,255,0.05)", color: "var(--text3)", fontSize: 8 }}>⭐{game.rating}</span></div>
@@ -417,7 +520,7 @@ export default function App() {
 
   const GameRow = ({ game, idx }) => { const al = isAlerted(game); return (
     <div onClick={() => setSelectedGame(game)} style={{ display: "flex", alignItems: "center", gap: 12, padding: "9px 12px", background: al ? "rgba(0,111,255,0.04)" : "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, cursor: "pointer", transition: "0.2s", animation: "slideIn 0.3s " + (idx * 0.03) + "s both" }} onMouseEnter={e => e.currentTarget.style.background = "var(--surface2)"} onMouseLeave={e => e.currentTarget.style.background = al ? "rgba(0,111,255,0.04)" : "var(--surface)"}>
-      <span style={{ fontSize: 22, width: 30, textAlign: "center" }}>{game.image}</span>
+      <div style={{ width: 30, height: 30, borderRadius: 6, overflow: "hidden", flexShrink: 0 }}><img src={game.image} alt={game.title} style={{ width: "100%", height: "100%", objectFit: "cover" }} /></div>
       <div style={{ flex: 1 }}><div style={{ fontWeight: 600, fontSize: 12 }}>{game.title}{al && " 🔔"}</div><div style={{ fontSize: 10, color: "var(--text3)" }}>{game.platform.join("/")} · {game.genre}</div></div>
       <div style={{ textAlign: "right" }}><div style={{ fontFamily: "'Rajdhani'", fontWeight: 700, fontSize: 15, color: "var(--green)" }}>${game.salePrice}</div><div style={{ fontSize: 9, color: "var(--text3)" }}><span style={{ textDecoration: "line-through" }}>${game.originalPrice}</span> <span style={{ color: "var(--red)" }}>-{game.discount}%</span></div></div>
       <button onClick={e => { e.stopPropagation(); toggleWishlist(game.id); }} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 13 }}>{wishlist.has(game.id) ? "❤️" : "🤍"}</button>
@@ -486,7 +589,7 @@ export default function App() {
       </div>
       <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 16, padding: 20 }}>
         <h3 style={{ fontFamily: "'Rajdhani'", fontWeight: 700, fontSize: 15, marginBottom: 4, display: "flex", alignItems: "center", gap: 8 }}>🎯 Per-Game Alerts {!limits.perGameAlerts && <UpgradePrompt compact requiredPlan="pro" onUpgrade={() => openUpgrade("pro")} />}</h3>
-        {limits.perGameAlerts ? (Object.entries(gameAlerts).filter(([, a]) => a.enabled).length > 0 ? <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 10 }}>{Object.entries(gameAlerts).filter(([, a]) => a.enabled).map(([id, a]) => { const g = GAMES.find(gm => gm.id === +id); if (!g) return null; return <div key={id} onClick={() => setSelectedGame(g)} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 10px", background: "var(--surface2)", borderRadius: 8, cursor: "pointer" }}><span style={{ fontSize: 18 }}>{g.image}</span><div style={{ flex: 1, fontSize: 11, fontWeight: 600 }}>{g.title}</div><div style={{ fontSize: 9, color: "var(--cyan)" }}>{(a.type === "discount" || a.type === "both") && <div>≥{a.minDiscount}%</div>}{(a.type === "price" || a.type === "both") && <div>≤${a.maxPrice}</div>}</div></div>; })}</div> : <p style={{ fontSize: 11, color: "var(--text3)", marginTop: 8 }}>No per-game alerts. Open any game → Alerts tab.</p>) : <p style={{ fontSize: 11, color: "var(--text3)", marginTop: 8 }}>Upgrade to Pro for per-game alerts.</p>}
+        {limits.perGameAlerts ? (Object.entries(gameAlerts).filter(([, a]) => a.enabled).length > 0 ? <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 10 }}>{Object.entries(gameAlerts).filter(([, a]) => a.enabled).map(([id, a]) => { const g = GAMES.find(gm => gm.id === +id); if (!g) return null; return <div key={id} onClick={() => setSelectedGame(g)} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 10px", background: "var(--surface2)", borderRadius: 8, cursor: "pointer" }}><div style={{ width: 24, height: 24, borderRadius: 5, overflow: "hidden", flexShrink: 0 }}><img src={g.image} alt={g.title} style={{ width: "100%", height: "100%", objectFit: "cover" }} /></div><div style={{ flex: 1, fontSize: 11, fontWeight: 600 }}>{g.title}</div><div style={{ fontSize: 9, color: "var(--cyan)" }}>{(a.type === "discount" || a.type === "both") && <div>≥{a.minDiscount}%</div>}{(a.type === "price" || a.type === "both") && <div>≤${a.maxPrice}</div>}</div></div>; })}</div> : <p style={{ fontSize: 11, color: "var(--text3)", marginTop: 8 }}>No per-game alerts. Open any game → Alerts tab.</p>) : <p style={{ fontSize: 11, color: "var(--text3)", marginTop: 8 }}>Upgrade to Pro for per-game alerts.</p>}
       </div>
     </div>
   );
@@ -495,7 +598,7 @@ export default function App() {
     <div style={{ animation: "fadeIn 0.4s both" }}>
       <div style={{ textAlign: "center", marginBottom: 28 }}><h2 style={{ fontFamily: "'Rajdhani'", fontWeight: 700, fontSize: 26, marginBottom: 4 }}>Choose Your Plan</h2><p style={{ fontSize: 13, color: "var(--text3)" }}>PS Game Deals Radar v1.0.0 — Save more with premium features</p></div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14, maxWidth: 860, margin: "0 auto" }}>
-        {Object.values(PLANS).map(pl => { const active = subscription.plan === pl.id; return (
+        {Object.values(plans).map(pl => { const active = subscription.plan === pl.id; return (
           <div key={pl.id} style={{ background: "var(--surface)", borderRadius: 20, overflow: "hidden", border: active ? "2px solid " + pl.color : pl.id === "pro" ? "2px solid rgba(0,212,255,0.3)" : "1px solid var(--border)", animation: pl.id === "ultimate" ? "goldGlow 3s infinite" : pl.id === "pro" ? "glow 3s infinite" : "none" }}>
             {pl.id === "pro" && <div style={{ background: "var(--grad-pro)", padding: 4, textAlign: "center", fontSize: 9, fontWeight: 700, color: "#fff", letterSpacing: 1.5, fontFamily: "'Rajdhani'" }}>MOST POPULAR</div>}
             {pl.id === "ultimate" && <div style={{ background: "var(--grad-ult)", padding: 4, textAlign: "center", fontSize: 9, fontWeight: 700, color: "#000", letterSpacing: 1.5, fontFamily: "'Rajdhani'" }}>BEST VALUE</div>}
@@ -530,8 +633,222 @@ export default function App() {
     </div>
   );
 
-  const navItems = [{ id: "dashboard", icon: "home", label: "Dashboard" }, { id: "browse", icon: "search", label: "Browse" }, { id: "wishlist", icon: "heart", label: "Wishlist" }, { id: "alerts", icon: "bell", label: "Alerts" }, { id: "pricing", icon: "crown", label: "Pricing" }, { id: "account", icon: "user", label: "Account" }];
-  const pages = { dashboard: <DashboardPage />, browse: <BrowsePage />, wishlist: <WishlistPage />, alerts: <AlertsPage />, pricing: <PricingPage />, account: <AccountPage /> };
+  /* ═══════════ ADMIN SETTINGS PAGE ═══════════ */
+  const AdminSettingsPage = () => {
+    const [editPlans, setEditPlans] = useState(JSON.parse(JSON.stringify(plans)));
+    const [hasChanges, setHasChanges] = useState(false);
+    const [saved, setSaved] = useState(false);
+
+    const updatePlan = (planId, field, value) => {
+      setEditPlans(prev => {
+        const next = { ...prev, [planId]: { ...prev[planId], [field]: value } };
+        setHasChanges(true); setSaved(false);
+        return next;
+      });
+    };
+
+    const updateLimit = (planId, key, value) => {
+      setEditPlans(prev => {
+        const next = { ...prev, [planId]: { ...prev[planId], limits: { ...prev[planId].limits, [key]: value } } };
+        setHasChanges(true); setSaved(false);
+        return next;
+      });
+    };
+
+    const rebuildFeatureList = (planObj) => {
+      const l = planObj.limits;
+      const feats = [];
+      if (l.wishlistMax >= 999) feats.push("Unlimited game tracking");
+      else feats.push("Track up to " + l.wishlistMax + " games");
+      feats.push(l.regionsMax === 1 ? "1 region" : l.regionsMax + " regions");
+      feats.push(l.priceHistoryMonths + "-month price history");
+      const notifs = ["Push"];
+      if (l.emailNotifs) notifs.push("Email");
+      if (l.telegramNotifs) notifs.push("Telegram");
+      feats.push(notifs.join(" + ") + " notifications");
+      if (l.perGameAlerts) feats.push("Per-game custom alerts");
+      if (l.desiredPrice) feats.push("Desired price targets");
+      if (l.priceStats) feats.push("Price stats & analysis");
+      if (l.dlcTracking) feats.push("DLC & add-on tracking");
+      if (l.multiRegionNotifs) feats.push("Multi-region notifications");
+      if (l.priorityAlerts) feats.push("Priority deal alerts");
+      if (l.exportData) feats.push("Data export (CSV/JSON)");
+      if (l.noAds) feats.push("Ad-free experience");
+      return feats;
+    };
+
+    const saveAll = () => {
+      const finalized = {};
+      for (const [pid, pl] of Object.entries(editPlans)) {
+        const feats = rebuildFeatureList(pl);
+        const allFeatureKeys = ALL_FEATURES.filter(f => f.type === "bool").map(f => f.key);
+        const notInc = allFeatureKeys.filter(k => !pl.limits[k]).map(k => ALL_FEATURES.find(f => f.key === k)?.label).filter(Boolean);
+        finalized[pid] = { ...pl, features: feats, notIncluded: pid === "free" ? notInc : (pid === "pro" ? allFeatureKeys.filter(k => !pl.limits[k]).map(k => ALL_FEATURES.find(f => f.key === k)?.label).filter(Boolean) : []) };
+      }
+      setPlans(finalized);
+      setHasChanges(false);
+      setSaved(true);
+      showToast("Subscription plans updated! ✅");
+    };
+
+    const resetAll = () => { setEditPlans(JSON.parse(JSON.stringify(DEFAULT_PLANS))); setHasChanges(true); setSaved(false); };
+
+    const ICONS = ["🎮","⚡","👑","🔥","💎","🚀","⭐","🏆","💰","🎯","🛡️","✨"];
+    const COLORS = ["#8892a4","#00d4ff","#ffd600","#ff2d55","#00e676","#ff9500","#006fff","#9c27b0","#e91e63","#00bcd4"];
+
+    return (
+      <div style={{ animation: "fadeIn 0.4s both" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 22 }}>
+          <div>
+            <h2 style={{ fontFamily: "'Rajdhani'", fontWeight: 700, fontSize: 22, marginBottom: 4 }}>Admin — Subscription Plans</h2>
+            <p style={{ fontSize: 12, color: "var(--text3)" }}>Customize tier names, prices, and features. Changes apply instantly.</p>
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={resetAll} style={{ padding: "8px 16px", borderRadius: 10, border: "1px solid var(--border)", background: "var(--surface2)", color: "var(--text3)", cursor: "pointer", fontSize: 11, fontWeight: 600 }}>Reset Defaults</button>
+            <button onClick={saveAll} disabled={!hasChanges} style={{ padding: "8px 20px", borderRadius: 10, border: "none", background: hasChanges ? "var(--grad1)" : "var(--surface2)", color: hasChanges ? "#fff" : "var(--text3)", cursor: hasChanges ? "pointer" : "default", fontSize: 12, fontWeight: 700 }}>
+              {saved ? "✅ Saved!" : "💾 Save Changes"}
+            </button>
+          </div>
+        </div>
+
+        {["free", "pro", "ultimate"].map((pid, tierIdx) => {
+          const pl = editPlans[pid]; if (!pl) return null;
+          return (
+            <div key={pid} style={{ background: "var(--surface)", border: "1px solid " + (pl.color || "var(--border)") + "33", borderRadius: 20, padding: 24, marginBottom: 20, animation: "fadeIn 0.4s " + (tierIdx * 0.1) + "s both" }}>
+
+              {/* ── TIER HEADER ── */}
+              <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 20, paddingBottom: 16, borderBottom: "1px solid var(--border)" }}>
+                <div style={{ width: 48, height: 48, borderRadius: 14, background: (pl.color || "#888") + "20", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, border: "2px solid " + (pl.color || "#888") + "40" }}>{pl.icon}</div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontFamily: "'Rajdhani'", fontWeight: 700, fontSize: 20, color: pl.color || "var(--text)" }}>{pl.name} Tier</div>
+                  <div style={{ fontSize: 11, color: "var(--text3)" }}>
+                    {pid === "free" ? "Free forever" : pl.monthlyPrice ? "$" + pl.monthlyPrice + "/mo · $" + pl.yearlyPrice + "/yr" + (pl.lifetimePrice ? " · $" + pl.lifetimePrice + " lifetime" : "") : "Configure pricing below"}
+                  </div>
+                </div>
+              </div>
+
+              {/* ── NAME & ICON/COLOR ── */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 20 }}>
+                <div>
+                  <label style={{ fontSize: 10, color: "var(--text3)", fontWeight: 600, letterSpacing: 1, fontFamily: "'Rajdhani'", display: "block", marginBottom: 6 }}>TIER NAME</label>
+                  <input value={pl.name} onChange={e => updatePlan(pid, "name", e.target.value)} style={{ width: "100%", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 10, padding: "10px 14px", color: "var(--text)", fontSize: 14, fontWeight: 600, outline: "none" }} />
+                </div>
+                <div>
+                  <label style={{ fontSize: 10, color: "var(--text3)", fontWeight: 600, letterSpacing: 1, fontFamily: "'Rajdhani'", display: "block", marginBottom: 6 }}>ICON</label>
+                  <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                    {ICONS.map(ic => (
+                      <button key={ic} onClick={() => updatePlan(pid, "icon", ic)} style={{ width: 34, height: 34, borderRadius: 8, border: pl.icon === ic ? "2px solid " + (pl.color || "var(--cyan)") : "1px solid var(--border)", background: pl.icon === ic ? (pl.color || "var(--cyan)") + "20" : "var(--surface2)", cursor: "pointer", fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center" }}>{ic}</button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* ── COLOR ── */}
+              <div style={{ marginBottom: 20 }}>
+                <label style={{ fontSize: 10, color: "var(--text3)", fontWeight: 600, letterSpacing: 1, fontFamily: "'Rajdhani'", display: "block", marginBottom: 6 }}>TIER COLOR</label>
+                <div style={{ display: "flex", gap: 6 }}>
+                  {COLORS.map(c => (
+                    <button key={c} onClick={() => updatePlan(pid, "color", c)} style={{ width: 28, height: 28, borderRadius: "50%", border: pl.color === c ? "3px solid #fff" : "2px solid transparent", background: c, cursor: "pointer", boxShadow: pl.color === c ? "0 0 12px " + c + "80" : "none", transition: "0.2s" }} />
+                  ))}
+                </div>
+              </div>
+
+              {/* ── PRICING ── */}
+              {pid !== "free" && (
+                <div style={{ marginBottom: 20 }}>
+                  <label style={{ fontSize: 10, color: "var(--text3)", fontWeight: 600, letterSpacing: 1, fontFamily: "'Rajdhani'", display: "block", marginBottom: 10 }}>PRICING</label>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+                    <div>
+                      <label style={{ fontSize: 10, color: "var(--text3)", display: "block", marginBottom: 4 }}>Monthly ($)</label>
+                      <div style={{ position: "relative" }}>
+                        <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "var(--text3)", fontSize: 14, fontWeight: 600 }}>$</span>
+                        <input type="number" step="0.01" min="0" value={pl.monthlyPrice || ""} onChange={e => updatePlan(pid, "monthlyPrice", parseFloat(e.target.value) || 0)} style={{ width: "100%", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 10, padding: "10px 14px 10px 28px", color: "var(--green)", fontSize: 16, fontWeight: 700, fontFamily: "'Rajdhani'", outline: "none" }} />
+                      </div>
+                    </div>
+                    <div>
+                      <label style={{ fontSize: 10, color: "var(--text3)", display: "block", marginBottom: 4 }}>Yearly ($)</label>
+                      <div style={{ position: "relative" }}>
+                        <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "var(--text3)", fontSize: 14, fontWeight: 600 }}>$</span>
+                        <input type="number" step="0.01" min="0" value={pl.yearlyPrice || ""} onChange={e => updatePlan(pid, "yearlyPrice", parseFloat(e.target.value) || 0)} style={{ width: "100%", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 10, padding: "10px 14px 10px 28px", color: "var(--green)", fontSize: 16, fontWeight: 700, fontFamily: "'Rajdhani'", outline: "none" }} />
+                      </div>
+                      {pl.monthlyPrice > 0 && pl.yearlyPrice > 0 && <div style={{ fontSize: 10, color: "var(--cyan)", marginTop: 4 }}>Saves {Math.round((1 - pl.yearlyPrice / (pl.monthlyPrice * 12)) * 100)}% vs monthly</div>}
+                    </div>
+                    <div>
+                      <label style={{ fontSize: 10, color: "var(--text3)", display: "block", marginBottom: 4 }}>Lifetime ($) <span style={{ color: "var(--text3)", fontStyle: "italic" }}>optional</span></label>
+                      <div style={{ position: "relative" }}>
+                        <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "var(--text3)", fontSize: 14, fontWeight: 600 }}>$</span>
+                        <input type="number" step="0.01" min="0" value={pl.lifetimePrice || ""} placeholder="—" onChange={e => updatePlan(pid, "lifetimePrice", parseFloat(e.target.value) || null)} style={{ width: "100%", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 10, padding: "10px 14px 10px 28px", color: pl.lifetimePrice ? "var(--gold)" : "var(--text3)", fontSize: 16, fontWeight: 700, fontFamily: "'Rajdhani'", outline: "none" }} />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ── FEATURE LIMITS (numbers) ── */}
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ fontSize: 10, color: "var(--text3)", fontWeight: 600, letterSpacing: 1, fontFamily: "'Rajdhani'", display: "block", marginBottom: 10 }}>LIMITS</label>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
+                  {ALL_FEATURES.filter(f => f.type === "number").map(feat => (
+                    <div key={feat.key} style={{ background: "var(--surface2)", borderRadius: 10, padding: "10px 14px" }}>
+                      <label style={{ fontSize: 10, color: "var(--text3)", display: "block", marginBottom: 4 }}>{feat.label}</label>
+                      <input type="number" min="1" value={pl.limits[feat.key] >= 999 ? 999 : pl.limits[feat.key]} onChange={e => updateLimit(pid, feat.key, parseInt(e.target.value) || 1)} style={{ width: "100%", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 8, padding: "7px 10px", color: "var(--text)", fontSize: 14, fontWeight: 600, fontFamily: "'Rajdhani'", outline: "none" }} />
+                      {pl.limits[feat.key] >= 999 && <div style={{ fontSize: 9, color: "var(--cyan)", marginTop: 2 }}>999 = Unlimited</div>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* ── FEATURE TOGGLES (checkboxes) ── */}
+              <div>
+                <label style={{ fontSize: 10, color: "var(--text3)", fontWeight: 600, letterSpacing: 1, fontFamily: "'Rajdhani'", display: "block", marginBottom: 10 }}>FEATURES</label>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+                  {ALL_FEATURES.filter(f => f.type === "bool").map(feat => {
+                    const on = !!pl.limits[feat.key];
+                    return (
+                      <div key={feat.key} onClick={() => updateLimit(pid, feat.key, !on)} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", background: on ? (pl.color || "var(--cyan)") + "10" : "var(--surface2)", borderRadius: 10, cursor: "pointer", border: on ? "1px solid " + (pl.color || "var(--cyan)") + "30" : "1px solid var(--border)", transition: "0.2s" }}>
+                        <div style={{ width: 20, height: 20, borderRadius: 6, border: on ? "2px solid " + (pl.color || "var(--cyan)") : "2px solid var(--border)", background: on ? (pl.color || "var(--cyan)") : "transparent", display: "flex", alignItems: "center", justifyContent: "center", transition: "0.2s", flexShrink: 0 }}>
+                          {on && <Icon name="check" size={12} color={pid === "ultimate" ? "#000" : "#fff"} />}
+                        </div>
+                        <span style={{ fontSize: 12, color: on ? "var(--text)" : "var(--text3)", fontWeight: on ? 600 : 400 }}>{feat.label}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+            </div>
+          );
+        })}
+
+        {/* ── PREVIEW ── */}
+        <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 18, padding: 22, marginTop: 8 }}>
+          <h3 style={{ fontFamily: "'Rajdhani'", fontWeight: 700, fontSize: 15, marginBottom: 14, display: "flex", alignItems: "center", gap: 8 }}>👁️ Live Preview</h3>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
+            {Object.values(editPlans).map(pl => (
+              <div key={pl.id} style={{ background: "var(--surface2)", borderRadius: 14, padding: 16, border: "1px solid " + (pl.color || "var(--border)") + "30" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                  <span style={{ fontSize: 20 }}>{pl.icon}</span>
+                  <div style={{ fontFamily: "'Rajdhani'", fontWeight: 700, fontSize: 16, color: pl.color || "var(--text)" }}>{pl.name}</div>
+                </div>
+                <div style={{ marginBottom: 12 }}>
+                  {pl.id === "free" ? <div style={{ fontFamily: "'Rajdhani'", fontWeight: 800, fontSize: 24 }}>Free</div> : (
+                    <div><span style={{ fontFamily: "'Rajdhani'", fontWeight: 800, fontSize: 24, color: pl.color }}>${pl.monthlyPrice}</span><span style={{ fontSize: 11, color: "var(--text3)" }}>/mo</span>{pl.yearlyPrice > 0 && <span style={{ fontSize: 11, color: "var(--text3)", marginLeft: 8 }}>${pl.yearlyPrice}/yr</span>}</div>
+                  )}
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                  {rebuildFeatureList(pl).slice(0, 6).map((f, i) => <div key={i} style={{ fontSize: 10, color: "var(--text2)", display: "flex", alignItems: "center", gap: 4 }}><span style={{ color: "var(--green)" }}>✓</span>{f}</div>)}
+                  {rebuildFeatureList(pl).length > 6 && <div style={{ fontSize: 10, color: "var(--text3)" }}>+{rebuildFeatureList(pl).length - 6} more</div>}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const navItems = [{ id: "dashboard", icon: "home", label: "Dashboard" }, { id: "browse", icon: "search", label: "Browse" }, { id: "wishlist", icon: "heart", label: "Wishlist" }, { id: "alerts", icon: "bell", label: "Alerts" }, { id: "pricing", icon: "crown", label: "Pricing" }, { id: "account", icon: "user", label: "Account" }, { id: "admin", icon: "settings", label: "Admin" }];
+  const pages = { dashboard: <DashboardPage />, browse: <BrowsePage />, wishlist: <WishlistPage />, alerts: <AlertsPage />, pricing: <PricingPage />, account: <AccountPage />, admin: <AdminSettingsPage /> };
 
   return (
     <div style={{ display: "flex", minHeight: "100vh", background: "var(--bg)", fontFamily: "'Barlow', sans-serif" }}>
@@ -539,15 +856,25 @@ export default function App() {
       <nav style={{ width: 200, background: "var(--surface)", borderRight: "1px solid var(--border)", padding: "16px 8px", display: "flex", flexDirection: "column", position: "sticky", top: 0, height: "100vh", flexShrink: 0, overflow: "auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 8px", marginBottom: 22 }}><div style={{ width: 28, height: 28, borderRadius: 8, background: "var(--grad1)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, boxShadow: "0 4px 16px rgba(0,111,255,0.3)" }}>🎮</div><span style={{ fontFamily: "'Rajdhani'", fontWeight: 700, fontSize: 14, background: "var(--grad1)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>PS GAME DEALS RADAR</span><span style={{ fontSize: 8, color: "var(--text3)", fontFamily: "'Rajdhani'", fontWeight: 600, marginLeft: -4 }}>v1.0.0</span></div>
         <div style={{ display: "flex", flexDirection: "column", gap: 2, flex: 1 }}>{navItems.map(n => (
-          <button key={n.id} onClick={() => setPage(n.id)} style={{ display: "flex", alignItems: "center", gap: 9, padding: "8px 10px", borderRadius: 9, border: "none", background: page === n.id ? "rgba(0,111,255,0.12)" : "transparent", color: page === n.id ? "var(--cyan)" : "var(--text2)", cursor: "pointer", fontSize: 12, fontWeight: page === n.id ? 600 : 400, fontFamily: "'Barlow'", transition: "0.2s", textAlign: "left", width: "100%" }}>
-            <Icon name={n.icon} size={14} color={page === n.id ? "#00d4ff" : "#8892a4"} /> {n.label}
-            {n.id === "alerts" && alertedGames.length > 0 && <span style={{ marginLeft: "auto", background: "var(--red)", color: "#fff", borderRadius: "50%", width: 16, height: 16, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 700 }}>{alertedGames.length}</span>}
-            {n.id === "pricing" && subscription.plan === "free" && <span style={{ marginLeft: "auto", fontSize: 7, background: "var(--grad-gold)", color: "#000", padding: "2px 5px", borderRadius: 4, fontWeight: 700 }}>NEW</span>}
-          </button>
+          <div key={n.id}>
+            {n.id === "admin" && <div style={{ borderTop: "1px solid var(--border)", margin: "8px 10px 6px", paddingTop: 8 }}><div style={{ fontSize: 8, color: "var(--text3)", fontFamily: "'Rajdhani'", letterSpacing: 1.5, fontWeight: 600, marginBottom: 4, paddingLeft: 2 }}>ADMIN</div></div>}
+            <button onClick={() => setPage(n.id)} style={{ display: "flex", alignItems: "center", gap: 9, padding: "8px 10px", borderRadius: 9, border: "none", background: page === n.id ? "rgba(0,111,255,0.12)" : "transparent", color: page === n.id ? "var(--cyan)" : "var(--text2)", cursor: "pointer", fontSize: 12, fontWeight: page === n.id ? 600 : 400, fontFamily: "'Barlow'", transition: "0.2s", textAlign: "left", width: "100%" }}>
+              <Icon name={n.icon} size={14} color={page === n.id ? "#00d4ff" : "#8892a4"} /> {n.label}
+              {n.id === "alerts" && alertedGames.length > 0 && <span style={{ marginLeft: "auto", background: "var(--red)", color: "#fff", borderRadius: "50%", width: 16, height: 16, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 700 }}>{alertedGames.length}</span>}
+              {n.id === "pricing" && subscription.plan === "free" && <span style={{ marginLeft: "auto", fontSize: 7, background: "var(--grad-gold)", color: "#000", padding: "2px 5px", borderRadius: 4, fontWeight: 700 }}>NEW</span>}
+            </button>
+          </div>
         ))}</div>
         <div style={{ padding: "10px 8px", borderTop: "1px solid var(--border)", marginTop: 6 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: subscription.plan === "free" ? 8 : 0 }}><div style={{ width: 24, height: 24, borderRadius: 6, background: (plan.color || "#888") + "20", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, border: "1px solid " + (plan.color || "#888") + "40" }}>{plan.icon}</div><div><div style={{ fontSize: 10, fontWeight: 700, color: plan.color, fontFamily: "'Rajdhani'" }}>{(plan.name || "FREE").toUpperCase()}</div>{psnLinked && <div style={{ fontSize: 8, color: "var(--green)" }}>● {psnUsername}</div>}</div></div>
-          {subscription.plan === "free" && <button onClick={() => setPage("pricing")} style={{ width: "100%", padding: 6, borderRadius: 7, border: "none", background: "var(--grad-pro)", color: "#fff", cursor: "pointer", fontSize: 10, fontWeight: 700 }}>⚡ Upgrade</button>}
+          {user ? (
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 8 }}><div style={{ width: 24, height: 24, borderRadius: 6, background: (plan.color || "#888") + "20", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, border: "1px solid " + (plan.color || "#888") + "40" }}>{plan.icon}</div><div><div style={{ fontSize: 10, fontWeight: 700, color: plan.color, fontFamily: "'Rajdhani'" }}>{(plan.name || "FREE").toUpperCase()}</div><div style={{ fontSize: 8, color: "var(--text3)" }}>{user.email?.split("@")[0]}</div>{psnLinked && <div style={{ fontSize: 8, color: "var(--green)" }}>● {psnUsername}</div>}</div></div>
+              {subscription.plan === "free" && <button onClick={() => setPage("pricing")} style={{ width: "100%", padding: 6, borderRadius: 7, border: "none", background: "var(--grad-pro)", color: "#fff", cursor: "pointer", fontSize: 10, fontWeight: 700, marginBottom: 6 }}>⚡ Upgrade</button>}
+              <button onClick={() => { signOut(); showToast("Signed out"); }} style={{ width: "100%", padding: 6, borderRadius: 7, border: "1px solid var(--border)", background: "transparent", color: "var(--text3)", cursor: "pointer", fontSize: 9, fontWeight: 600 }}>Sign Out</button>
+            </div>
+          ) : (
+            <button onClick={() => setShowAuthModal(true)} style={{ width: "100%", padding: 8, borderRadius: 8, border: "none", background: "var(--grad1)", color: "#fff", cursor: "pointer", fontSize: 11, fontWeight: 700, fontFamily: "'Barlow'" }}>🔑 Sign In / Sign Up</button>
+          )}
           <div style={{ textAlign: "center", marginTop: 10, fontSize: 8, color: "var(--text3)", fontFamily: "'Rajdhani'", letterSpacing: 1 }}>PS GAME DEALS RADAR v1.0.0</div>
         </div>
       </nav>
@@ -555,6 +882,7 @@ export default function App() {
       {selectedGame && <GameDetail game={selectedGame} onClose={() => setSelectedGame(null)} />}
       <PaymentModal />
       {notifToast && <div style={{ position: "fixed", bottom: 18, right: 18, background: "var(--surface)", border: "1px solid rgba(0,212,255,0.2)", borderRadius: 12, padding: "10px 16px", boxShadow: "0 12px 40px rgba(0,0,0,0.4)", zIndex: 3000, animation: "fadeIn 0.3s both", backdropFilter: "blur(12px)" }}><span style={{ fontSize: 12 }}>{notifToast}</span></div>}
+      {showAuthModal && <AuthModal onClose={() => setShowAuthModal(false)} onSuccess={() => { refreshProfile(); showToast("Welcome! 🎮"); }} />}
     </div>
   );
 }
